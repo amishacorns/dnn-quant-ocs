@@ -88,84 +88,86 @@ def float_range(val_str):
         raise argparse.ArgumentTypeError('Must be >= 0 and < 1 (received {0})'.format(val_str))
     return val
 
-parser = argparse.ArgumentParser(description='Distiller image classification model compression')
-parser.add_argument('data', metavar='DIR', help='path to dataset')
-parser.add_argument('--arch', '-a', metavar='ARCH', default='resnet18',
-                    choices=ALL_MODEL_NAMES,
-                    help='model architecture: ' +
-                    ' | '.join(ALL_MODEL_NAMES) +
-                    ' (default: resnet18)')
-parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
-                    help='number of data loading workers (default: 4)')
-parser.add_argument('--epochs', default=90, type=int, metavar='N',
-                    help='number of total epochs to run')
-parser.add_argument('-b', '--batch-size', default=256, type=int,
-                    metavar='N', help='mini-batch size (default: 256)')
-parser.add_argument('--lr', '--learning-rate', default=0.1, type=float,
-                    metavar='LR', help='initial learning rate')
-parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
-                    help='momentum')
-parser.add_argument('--weight-decay', '--wd', default=1e-4, type=float,
-                    metavar='W', help='weight decay (default: 1e-4)')
-parser.add_argument('--print-freq', '-p', default=10, type=int,
-                    metavar='N', help='print frequency (default: 10)')
-parser.add_argument('--resume', default='', type=str, metavar='PATH',
-                    help='path to latest checkpoint (default: none)')
-parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
-                    help='evaluate model on validation set')
-parser.add_argument('--pretrained', dest='pretrained', action='store_true',
-                    help='use pre-trained model')
-parser.add_argument('--act-stats', dest='activation_stats', action='store_true', default=False,
-                    help='collect activation statistics (WARNING: this slows down training)')
-parser.add_argument('--param-hist', dest='log_params_histograms', action='store_true', default=False,
-                    help='log the paramter tensors histograms to file (WARNING: this can use significant disk space)')
-SUMMARY_CHOICES = ['sparsity', 'compute', 'model', 'modules', 'png', 'png_w_params', 'onnx']
-parser.add_argument('--summary', type=str, choices=SUMMARY_CHOICES,
-                    help='print a summary of the model, and exit - options: ' +
-                    ' | '.join(SUMMARY_CHOICES))
-parser.add_argument('--compress', dest='compress', type=str, nargs='?', action='store',
-                    help='configuration file for pruning the model (default is to use hard-coded schedule)')
-parser.add_argument('--sense', dest='sensitivity', choices=['element', 'filter', 'channel'],
-                    help='test the sensitivity of layers to pruning')
-parser.add_argument('--extras', default=None, type=str,
-                    help='file with extra configuration information')
-parser.add_argument('--deterministic', '--det', action='store_true',
-                    help='Ensure deterministic execution for re-producible results.')
-parser.add_argument('--quantize-method', default=None, type=str,
-                    choices=[None, "linear", "ocs"],
-                    help='Apply quantization to model before evaluation')
-parser.add_argument('--act-bits', default=8, type=int,
-                    help='Number of bits in quantized activations')
-parser.add_argument('--weight-bits', default=8, type=int,
-                    help='Number of bits in quantized weights')
+def create_parser():
+    parser = argparse.ArgumentParser(description='Distiller image classification model compression')
+    parser.add_argument('data', metavar='DIR', help='path to dataset')
+    parser.add_argument('--arch', '-a', metavar='ARCH', default='resnet18',
+                        choices=ALL_MODEL_NAMES,
+                        help='model architecture: ' +
+                        ' | '.join(ALL_MODEL_NAMES) +
+                        ' (default: resnet18)')
+    parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
+                        help='number of data loading workers (default: 4)')
+    parser.add_argument('--epochs', default=90, type=int, metavar='N',
+                        help='number of total epochs to run')
+    parser.add_argument('-b', '--batch-size', default=256, type=int,
+                        metavar='N', help='mini-batch size (default: 256)')
+    parser.add_argument('--lr', '--learning-rate', default=0.1, type=float,
+                        metavar='LR', help='initial learning rate')
+    parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
+                        help='momentum')
+    parser.add_argument('--weight-decay', '--wd', default=1e-4, type=float,
+                        metavar='W', help='weight decay (default: 1e-4)')
+    parser.add_argument('--print-freq', '-p', default=10, type=int,
+                        metavar='N', help='print frequency (default: 10)')
+    parser.add_argument('--resume', default='', type=str, metavar='PATH',
+                        help='path to latest checkpoint (default: none)')
+    parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
+                        help='evaluate model on validation set')
+    parser.add_argument('--pretrained', dest='pretrained', action='store_true',
+                        help='use pre-trained model')
+    parser.add_argument('--act-stats', dest='activation_stats', action='store_true', default=False,
+                        help='collect activation statistics (WARNING: this slows down training)')
+    parser.add_argument('--param-hist', dest='log_params_histograms', action='store_true', default=False,
+                        help='log the paramter tensors histograms to file (WARNING: this can use significant disk space)')
+    SUMMARY_CHOICES = ['sparsity', 'compute', 'model', 'modules', 'png', 'png_w_params', 'onnx']
+    parser.add_argument('--summary', type=str, choices=SUMMARY_CHOICES,
+                        help='print a summary of the model, and exit - options: ' +
+                        ' | '.join(SUMMARY_CHOICES))
+    parser.add_argument('--compress', dest='compress', type=str, nargs='?', action='store',
+                        help='configuration file for pruning the model (default is to use hard-coded schedule)')
+    parser.add_argument('--sense', dest='sensitivity', choices=['element', 'filter', 'channel'],
+                        help='test the sensitivity of layers to pruning')
+    parser.add_argument('--extras', default=None, type=str,
+                        help='file with extra configuration information')
+    parser.add_argument('--deterministic', '--det', action='store_true',
+                        help='Ensure deterministic execution for re-producible results.')
+    parser.add_argument('--quantize-method', default=None, type=str,
+                        choices=[None, "linear", "ocs"],
+                        help='Apply quantization to model before evaluation')
+    parser.add_argument('--act-bits', default=8, type=int,
+                        help='Number of bits in quantized activations')
+    parser.add_argument('--weight-bits', default=8, type=int,
+                        help='Number of bits in quantized weights')
 
-parser.add_argument('--weight-expand-ratio', default=0.0, type=float_range,
-                    help='The weight expand ratio in OCSQuantizer')
-parser.add_argument('--act-expand-ratio', default=0.0, type=float_range,
-                    help='The act expand ratio in OCSQuantizer')
-parser.add_argument('--weight-clip-threshold', default=1.0, type=float,
-                    help='The weight clip threshold in OCSQuantizer. Use 0 for mmse clipping')
-parser.add_argument('--act-clip-threshold', default=1.0, type=float,
-                    help='The act clip threshold in OCSQuantizer. Use 0 for mmse clipping')
-parser.add_argument('--profile-batches', default=1, type=int,
-                    help='The number of train batches to profile for OCSQuantizer')
+    parser.add_argument('--weight-expand-ratio', default=0.0, type=float_range,
+                        help='The weight expand ratio in OCSQuantizer')
+    parser.add_argument('--act-expand-ratio', default=0.0, type=float_range,
+                        help='The act expand ratio in OCSQuantizer')
+    parser.add_argument('--weight-clip-threshold', default=1.0, type=float,
+                        help='The weight clip threshold in OCSQuantizer. Use 0 for mmse clipping')
+    parser.add_argument('--act-clip-threshold', default=1.0, type=float,
+                        help='The act clip threshold in OCSQuantizer. Use 0 for mmse clipping')
+    parser.add_argument('--profile-batches', default=1, type=int,
+                        help='The number of train batches to profile for OCSQuantizer')
 
-parser.add_argument('--gpus', metavar='DEV_ID', default=None,
-                    help='Comma-separated list of GPU device IDs to be used (default is to use all available devices)')
-parser.add_argument('--name', '-n', metavar='NAME', default=None, help='Experiment name')
-parser.add_argument('--out-dir', '-o', dest='output_dir', default='logs', help='Path to dump logs and checkpoints')
-parser.add_argument('--validation-size', '--vs', type=float_range, default=0.0,
-                    help='Portion of training dataset to set aside for validation')
-parser.add_argument('--adc', dest='ADC', action='store_true', help='temp HACK')
-parser.add_argument('--adc-params', dest='ADC_params', default=None, help='temp HACK')
-parser.add_argument('--confusion', dest='display_confusion', default=False, action='store_true',
-                    help='Display the confusion matrix')
-parser.add_argument('--earlyexit_lossweights', type=float, nargs='*', dest='earlyexit_lossweights', default=None,
-                    help='List of loss weights for early exits (e.g. --lossweights 0.1 0.3)')
-parser.add_argument('--earlyexit_thresholds', type=float, nargs='*', dest='earlyexit_thresholds', default=None,
-                    help='List of EarlyExit thresholds (e.g. --earlyexit 1.2 0.9)')
+    parser.add_argument('--gpus', metavar='DEV_ID', default=None,
+                        help='Comma-separated list of GPU device IDs to be used (default is to use all available devices)')
+    parser.add_argument('--name', '-n', metavar='NAME', default=None, help='Experiment name')
+    parser.add_argument('--out-dir', '-o', dest='output_dir', default='logs', help='Path to dump logs and checkpoints')
+    parser.add_argument('--validation-size', '--vs', type=float_range, default=0.0,
+                        help='Portion of training dataset to set aside for validation')
+    parser.add_argument('--adc', dest='ADC', action='store_true', help='temp HACK')
+    parser.add_argument('--adc-params', dest='ADC_params', default=None, help='temp HACK')
+    parser.add_argument('--confusion', dest='display_confusion', default=False, action='store_true',
+                        help='Display the confusion matrix')
+    parser.add_argument('--earlyexit_lossweights', type=float, nargs='*', dest='earlyexit_lossweights', default=None,
+                        help='List of loss weights for early exits (e.g. --lossweights 0.1 0.3)')
+    parser.add_argument('--earlyexit_thresholds', type=float, nargs='*', dest='earlyexit_thresholds', default=None,
+                        help='List of EarlyExit thresholds (e.g. --earlyexit 1.2 0.9)')
 
-distiller.knowledge_distillation.add_distillation_args(parser, ALL_MODEL_NAMES, True)
+    distiller.knowledge_distillation.add_distillation_args(parser, ALL_MODEL_NAMES, True)
+    return parser
 
 def check_pytorch_version():
     if torch.__version__ < '0.4.0':
@@ -180,17 +182,22 @@ def check_pytorch_version():
         exit(1)
 
 
-def main():
+def main_func(args=None):
     global msglogger
     check_pytorch_version()
-    args = parser.parse_args()
+    parser = create_parser()
+    # parse the args if they aren't provided
+    if not args:
+        args = parser.parse_args()
+    else:
+        args = parser.parse_args(args=args)
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
     msglogger = apputils.config_pylogger(os.path.join(script_dir, 'logging.conf'), args.name, args.output_dir)
 
     # Log various details about the execution environment.  It is sometimes useful
     # to refer to past experiment executions and this information may be useful.
-    apputils.log_execution_env_state(sys.argv, gitroot=module_path)
+    # apputils.log_execution_env_state(sys.argv, gitroot=module_path)
     msglogger.debug("Distiller: %s", distiller.__version__)
 
     start_epoch = 0
@@ -556,6 +563,7 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
 
                 distiller.log_training_progress(stats, None, epoch, steps_completed,
                                                 total_steps, args.print_freq, loggers)
+        break
     if not args.earlyexit_thresholds:
         msglogger.info('==> Top1: %.3f    Top5: %.3f    Loss: %.3f\n',
                        classerr.value()[0], classerr.value()[1], losses['objective_loss'].mean)
@@ -702,7 +710,7 @@ def evaluate_model(model, criterion, train_loader, test_loader, loggers, args):
         apputils.save_checkpoint(0, args.arch, model, optimizer=None, best_top1=top1,
                                  name=args.name if args.name else checkpoint_name,
                                  dir=msglogger.logdir)
-
+    return top1
 
 def summarize_model(model, dataset, which_summary):
     if which_summary.startswith('png'):
@@ -758,7 +766,7 @@ def automated_deep_compression(model, criterion, loggers, args):
 
 if __name__ == '__main__':
     try:
-        main()
+        main_func()
     except KeyboardInterrupt:
         print("\n-- KeyboardInterrupt --")
     except Exception as e:

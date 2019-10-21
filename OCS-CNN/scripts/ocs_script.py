@@ -1,10 +1,8 @@
 import sys, os, re
 import subprocess as sp
-import numpy as np
-import timeit
 
-DATA_DIR = None
-MODELS = ['resnet50', 'densenet121', 'inception_v3']
+DATA_DIR = '/work/zhang-x2/common/datasets/imagenet-pytorch/'
+MODELS = ['resnet18', 'densenet121', 'inception_v3']
 RATIOS = [0, 0.01, 0.02, 0.05]
 WBITS = [8,7,6,5]
 ABITS = 8
@@ -36,6 +34,7 @@ if __name__ == "__main__":
                  "-b 128",
                  "-j 1",
                  "--vs=0",
+                 "--gpu=0",
                  "--out-dir=%s" % out_dir,
                  "--name=%s" % exp_name]
 
