@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import numpy as np
+import uptune as ut
 
 from .quantizer import Quantizer
 from .q_utils import *
@@ -13,6 +14,7 @@ from .clip import find_clip_aciq, find_clip_mmse, find_clip_entropy
 # mode. In this mode we collect activation stats and don't perform
 # quantization or OCS.
 PROFILE_MODE = False
+MAX_TUNED_LAYERS = 5
 
 def ocs_set_profile_mode(pm):
     global PROFILE_MODE
@@ -245,10 +247,15 @@ class OCSQuantizer(Quantizer):
         self.model.quantizer_metadata = {'type': type(self),
                                          'params': {'bits_activations': bits_activations,
                                                     'bits_parameters': bits_parameters}}
-
+        self.tune_counter = 0
         def replace_fn(module, name, qbits_map):
+            if self.tune_counter < MAX_TUNED_LAYERS:
+                ut_clip = ut.tune(weight_clip_threshold, (.80, 1.0))
+                self.tune_counter += 1
+            else:
+                ut_clip = weight_clip_threshold
             return OCSParamLayerWrapper(module, qbits_map[name].acts, qbits_map[name].wts,
-                                        weight_expand_ratio=weight_expand_ratio, weight_clip_threshold=weight_clip_threshold,
+                                        weight_expand_ratio=weight_expand_ratio, weight_clip_threshold=ut_clip,
                                         act_expand_ratio=act_expand_ratio, act_clip_threshold=act_clip_threshold)
 
         self.replacement_factory[nn.Conv2d] = replace_fn
