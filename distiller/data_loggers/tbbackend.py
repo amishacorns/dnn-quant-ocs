@@ -20,6 +20,8 @@ See: https://github.com/tensorflow/tensorflow/blob/master/tensorflow/core/framew
 """
 import tensorflow as tf
 import numpy as np
+import warnings
+warnings.filterwarnings('ignore', category=FutureWarning)
 
 class TBBackend(object):
 
