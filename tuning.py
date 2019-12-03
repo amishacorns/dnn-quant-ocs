@@ -4,12 +4,9 @@ from compress_classifier import main_func
 
 data_dir = '/work/zhang-x2/common/datasets/imagenet-pytorch/'
 model = 'resnet50'
-# MODEL_PATH = "OCS-CNN/logs/2019.10.21-194654/best.pth.tar"
 out_dir = 'logs_' + model
-# abits = ut.tune(8, (4, 8))
-# wbits = ut.tune(8, (4, 8))
-abits = 8
-wbits = 8
+abits = 4
+wbits = 4
 # w_thresh = ut.tune(.80, (.60, 1.0))
 # a_thresh = ut.tune(.80, (.60, 1.0))
 w_thresh = 1.0

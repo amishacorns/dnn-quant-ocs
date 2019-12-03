@@ -249,8 +249,8 @@ class OCSQuantizer(Quantizer):
         self.tune_counter = 0
         def replace_fn(module, name, qbits_map):
             if self.tune_counter < MAX_TUNED_LAYERS:
-                ut_clip_w = ut.tune(weight_clip_threshold, (.60, 1.0))
-                ut_clip_a = ut.tune(act_clip_threshold, (.60, 1.0))
+                ut_clip_w = ut.tune(weight_clip_threshold, (0, 1.0))
+                ut_clip_a = ut.tune(act_clip_threshold, (0, 1.0))
                 self.tune_counter += 1
             else:
                 ut_clip_w = weight_clip_threshold

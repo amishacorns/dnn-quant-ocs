@@ -114,7 +114,9 @@ def load_checkpoint(model, chkpt_file, optimizer=None):
             msglogger.info('Loaded quantizer metadata from the checkpoint')
             qmd = checkpoint['quantizer_metadata']
             quantizer = qmd['type'](model, **qmd['params'])
+            model.cpu()
             quantizer.prepare_model()
+            model.cuda()
 
         msglogger.info("=> loaded checkpoint '%s' (epoch %d)", chkpt_file, checkpoint['epoch'])
 
