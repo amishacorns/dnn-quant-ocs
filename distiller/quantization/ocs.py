@@ -14,8 +14,7 @@ from .clip import find_clip_aciq, find_clip_mmse, find_clip_entropy
 # mode. In this mode we collect activation stats and don't perform
 # quantization or OCS.
 PROFILE_MODE = False
-MAX_TUNED_LAYERS = 5
-
+MAX_TUNED_LAYERS = 100
 def ocs_set_profile_mode(pm):
     global PROFILE_MODE
     PROFILE_MODE = pm
@@ -250,13 +249,15 @@ class OCSQuantizer(Quantizer):
         self.tune_counter = 0
         def replace_fn(module, name, qbits_map):
             if self.tune_counter < MAX_TUNED_LAYERS:
-                ut_clip = ut.tune(weight_clip_threshold, (.80, 1.0))
+                ut_clip_w = ut.tune(weight_clip_threshold, (.60, 1.0))
+                ut_clip_a = ut.tune(act_clip_threshold, (.60, 1.0))
                 self.tune_counter += 1
             else:
-                ut_clip = weight_clip_threshold
+                ut_clip_w = weight_clip_threshold
+                ut_clip_a = act_clip_threshold
             return OCSParamLayerWrapper(module, qbits_map[name].acts, qbits_map[name].wts,
-                                        weight_expand_ratio=weight_expand_ratio, weight_clip_threshold=ut_clip,
-                                        act_expand_ratio=act_expand_ratio, act_clip_threshold=act_clip_threshold)
+                                        weight_expand_ratio=weight_expand_ratio, weight_clip_threshold=ut_clip_w,
+                                        act_expand_ratio=act_expand_ratio, act_clip_threshold=ut_clip_a)
 
         self.replacement_factory[nn.Conv2d] = replace_fn
         # self.replacement_factory[nn.Linear] = replace_fn

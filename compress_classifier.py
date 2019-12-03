@@ -563,7 +563,6 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1):
 
                 distiller.log_training_progress(stats, None, epoch, steps_completed,
                                                 total_steps, args.print_freq, loggers)
-        break
     if not args.earlyexit_thresholds:
         msglogger.info('==> Top1: %.3f    Top5: %.3f    Loss: %.3f\n',
                        classerr.value()[0], classerr.value()[1], losses['objective_loss'].mean)
@@ -766,7 +765,7 @@ def automated_deep_compression(model, criterion, loggers, args):
 
 if __name__ == '__main__':
     try:
-        main_func()
+        print(main_func())
     except KeyboardInterrupt:
         print("\n-- KeyboardInterrupt --")
     except Exception as e:
