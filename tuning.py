@@ -1,34 +1,28 @@
-import subprocess as sp
 import uptune as ut
-from compress_classifier import main_func
+from tuning_evaluate import main_func
 
 data_dir = '/work/zhang-x2/common/datasets/imagenet-pytorch/'
 model = 'resnet50'
 out_dir = 'logs_' + model
-abits = 4
-wbits = 4
+abits = 8
+wbits = 8
 # w_thresh = ut.tune(.80, (.60, 1.0))
 # a_thresh = ut.tune(.80, (.60, 1.0))
 w_thresh = 1.0
 a_thresh = 1.0
-# TODO skip quantizing the first and last layers for no
 
 exp_name = 'tuning-%da%dw-%2.2ft_w%2.2ft_a' % (abits, wbits, w_thresh, a_thresh)
 args = ["%s" % data_dir,
         "--arch=%s" % model,
-        "--evaluate",
-        # "--resume=%s" % MODEL_PATH,
-        "--pretrained",
         "--act-bits=%d" % abits,
         "--weight-bits=%d" % wbits,
         "--quantize-method=%s" % "ocs",
         "--weight-clip-threshold=%5.5f" % w_thresh,
         "--act-clip-threshold=%5.5f" % a_thresh,
-        "--profile-batches=4",
+        "--vs=.0005",
         "-b 128",
         "-j 1",
         "--gpu=0",  # arbitrary GPU since parallelization doesn't work
-        "--vs=0",
         "--out-dir=%s" % out_dir,
         "--name=%s" % exp_name
         ]
