@@ -14,7 +14,6 @@ from .clip import find_clip_aciq, find_clip_mmse, find_clip_entropy
 # mode. In this mode we collect activation stats and don't perform
 # quantization or OCS.
 PROFILE_MODE = False
-MAX_TUNED_LAYERS = 100
 def ocs_set_profile_mode(pm):
     global PROFILE_MODE
     PROFILE_MODE = pm
@@ -130,7 +129,6 @@ class OCSParamLayerWrapper(RangeLinearActQuantWrapper):
             # Input shape is (Batch, C, H, W)
             self.input_shape = input.shape
             num_channels = self.input_shape[1]
-            #print(input.shape)
 
             if num_channels > 3:
 
@@ -153,9 +151,6 @@ class OCSParamLayerWrapper(RangeLinearActQuantWrapper):
 
                 self.act_clip_max_abs = torch.tensor(act_clip_max_abs).cuda()
 
-                """ Get channels to split """
-                # Unused
-
             # For profiling, we use the original FP weights
             weight_q = self.wrapped_module.weight.data
             self.wrapped_module.weight.data = self.weight_orig.cuda()
@@ -172,11 +167,6 @@ class OCSParamLayerWrapper(RangeLinearActQuantWrapper):
             num_channels = input.shape[1]
             if num_channels == 3:
                 return self.wrapped_module.forward(*inputs)
-
-            """ If we don't need OCS on the activations, skip the
-                cuda->cpu->cuda transfer to save time """
-            #if self.act_expand_ratio == 0.0:
-            #    return super(OCSParamLayerWrapper, self).forward(input)
 
             """ Quantize inputs """
             inputs_q = []
@@ -239,22 +229,25 @@ class OCSParamLayerWrapper(RangeLinearActQuantWrapper):
 class OCSQuantizer(Quantizer):
     def __init__(self, model, bits_activations=8, bits_parameters=8,
                  weight_expand_ratio=0.0, weight_clip_threshold=1.0,
-                 act_expand_ratio=0.0, act_clip_threshold=1.0):
+                 act_expand_ratio=0.0, act_clip_threshold=1.0, ut_clip_dict=None):
         super(OCSQuantizer, self).__init__(model, bits_activations=bits_activations,
                                            bits_weights=bits_parameters,
                                            train_with_fp_copy=False)
+
         self.model.quantizer_metadata = {'type': type(self),
                                          'params': {'bits_activations': bits_activations,
-                                                    'bits_parameters': bits_parameters}}
-        self.tune_counter = 0
+                                                    'bits_parameters': bits_parameters},
+                                         }
         def replace_fn(module, name, qbits_map):
-            if self.tune_counter < MAX_TUNED_LAYERS:
-                ut_clip_w = ut.tune(weight_clip_threshold, (.7, 1.0))
-                ut_clip_a = ut.tune(act_clip_threshold, (.7, 1.0))
-                self.tune_counter += 1
+            ut_clip_w_name = name + '_clip_w'
+            ut_clip_a_name = name + '_clip_a'
+            # assume that key exists for now
+            if ut_clip_dict:
+                ut_clip_w = ut_clip_dict[name + '_clip_w']
+                ut_clip_a = ut_clip_dict[name + '_clip_a']
             else:
-                ut_clip_w = weight_clip_threshold
-                ut_clip_a = act_clip_threshold
+                ut_clip_w = ut.tune(weight_clip_threshold, (.7, 1.0), name=ut_clip_w_name)
+                ut_clip_a = ut.tune(act_clip_threshold, (.7, 1.0), name=ut_clip_a_name)
             return OCSParamLayerWrapper(module, qbits_map[name].acts, qbits_map[name].wts,
                                         weight_expand_ratio=weight_expand_ratio, weight_clip_threshold=ut_clip_w,
                                         act_expand_ratio=act_expand_ratio, act_clip_threshold=ut_clip_a)

@@ -53,8 +53,8 @@ models, or with the provided sample models:
 import argparse
 import time
 import os
-import pickle
 import sys
+import numpy as np
 import torch
 import torch.nn.parallel
 import torch.optim
@@ -105,7 +105,8 @@ def create_parser():
                         help='Number of bits in quantized activations')
     parser.add_argument('--weight-bits', default=8, type=int,
                         help='Number of bits in quantized weights')
-
+    parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
+                        help='evaluate model on validation set')
     parser.add_argument('--weight-expand-ratio', default=0.0, type=float_range,
                         help='The weight expand ratio in OCSQuantizer')
     parser.add_argument('--act-expand-ratio', default=0.0, type=float_range,
@@ -170,8 +171,8 @@ def main_func(args=None):
 
     # Switch to evaluation mode
     model.eval()
-
-    for validation_step, (inputs, target) in enumerate(val_loader):
+    data_loader = test_loader if args.evaluate else val_loader
+    for step, (inputs, target) in enumerate(data_loader):
         with torch.no_grad():
             inputs, target = inputs.to('cuda'), target.to('cuda')
             # compute output from model
@@ -210,6 +211,15 @@ def profile_for_quantization(data_loader, model):
     # measure elapsed time
     msglogger.info('==> Profile runtime: %d' % (time.time() - end))
 
+""" Parse CSV into dictionary"""
+def parse_csv(file_path):
+    model_layers = np.genfromtxt(file_path, delimiter=',', dtype=str)
+    model_layers = model_layers[0][2:-2]
+    clip_threshs = np.genfromtxt(file_path, delimiter=',', dtype=float)
+    clip_threshs = clip_threshs[1:]  # remove nans and bad cols
+    clip_threshs = clip_threshs[clip_threshs[:, -2].argmin()][2:-1]  # sort by second-to-last column
+
+    return dict(zip(model_layers, clip_threshs))
 
 def quantize_model(model, data_loader, args):
     if args.quantize_method:
@@ -217,12 +227,14 @@ def quantize_model(model, data_loader, args):
             quantizer = quantization.SymmetricLinearQuantizer(model,
                 args.act_bits, args.weight_bits)
         if args.quantize_method == "ocs":
+            ut_clip_dict = parse_csv('resnet18-8bit.csv')
             quantizer = quantization.OCSQuantizer(model,
                 args.act_bits, args.weight_bits,
                 weight_expand_ratio=args.weight_expand_ratio,
                 weight_clip_threshold=args.weight_clip_threshold,
                 act_expand_ratio=args.act_expand_ratio,
-                act_clip_threshold=args.act_clip_threshold)
+                act_clip_threshold=args.act_clip_threshold,
+                ut_clip_dict=ut_clip_dict)
         else:
             msglogger.info('--- Quantizer not found ---')
 
@@ -235,3 +247,7 @@ def quantize_model(model, data_loader, args):
             quantization.ocs_set_profile_mode(True)
             profile_for_quantization(data_loader, model)
             quantization.ocs_set_profile_mode(False)
+
+if __name__ == '__main__':
+    top1 = main_func()
+    print(top1)
