@@ -2,10 +2,10 @@ import uptune as ut
 from tuning_evaluate import main_func
 
 data_dir = '/work/zhang-x2/common/datasets/imagenet-pytorch/'
-model = 'resnet50'
+model = 'resnet18'
 out_dir = 'logs_' + model
-abits = 8
-wbits = 8
+abits = 5
+wbits = 5
 # w_thresh = ut.tune(.80, (.60, 1.0))
 # a_thresh = ut.tune(.80, (.60, 1.0))
 w_thresh = 1.0

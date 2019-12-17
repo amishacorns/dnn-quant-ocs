@@ -96,8 +96,8 @@ def create_parser():
                         metavar='N', help='mini-batch size (default: 256)')
     parser.add_argument('--print-freq', '-p', default=10, type=int,
                         metavar='N', help='print frequency (default: 10)')
-    parser.add_argument('--resume', default='', type=str, metavar='PATH',
-                        help='path to latest checkpoint (default: none)')
+    parser.add_argument('--ut_clip_dict', default='', type=str, metavar='PATH',
+                        help='path to the uptune output archive')
     parser.add_argument('--quantize-method', default=None, type=str,
                         choices=[None, "linear", "ocs"],
                         help='Apply quantization to model before evaluation')
@@ -227,7 +227,7 @@ def quantize_model(model, data_loader, args):
             quantizer = quantization.SymmetricLinearQuantizer(model,
                 args.act_bits, args.weight_bits)
         if args.quantize_method == "ocs":
-            ut_clip_dict = parse_csv('resnet18-8bit.csv')
+            ut_clip_dict = parse_csv(args.ut_clip_dict) if args.ut_clip_dict else None
             quantizer = quantization.OCSQuantizer(model,
                 args.act_bits, args.weight_bits,
                 weight_expand_ratio=args.weight_expand_ratio,
