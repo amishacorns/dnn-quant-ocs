@@ -31,7 +31,8 @@ class OCSParamLayerWrapper(RangeLinearActQuantWrapper):
     """
     def __init__(self, wrapped_module, num_bits_acts, num_bits_params, num_bits_accum=32,
                  weight_expand_ratio=0.0, weight_clip_threshold=1.0,
-                 act_expand_ratio=0.0, act_clip_threshold=1.0):
+                 act_expand_ratio=0.0, act_clip_threshold=1.0, mmse_track_dict=None,
+                 name=''):
         super(OCSParamLayerWrapper, self).__init__(wrapped_module,
                                                         num_bits_acts, num_bits_accum)
 
@@ -48,7 +49,9 @@ class OCSParamLayerWrapper(RangeLinearActQuantWrapper):
         self.act_expand_ratio = act_expand_ratio
         self.act_clip_threshold = act_clip_threshold
         self.split_threshold = 0.0
-
+        # save the mmse dict to be used during the profiling stage
+        self.mmse_track_dict = mmse_track_dict
+        self.name = name
         self.current_accum_scale = 1
 
         # Profiling
@@ -86,13 +89,18 @@ class OCSParamLayerWrapper(RangeLinearActQuantWrapper):
 
                 # Branch on clip method
                 if self.weight_clip_threshold == 0.0:
-                    clip_max_abs = find_clip_mmse(values, self.num_bits_params)
+                    clip_max_abs, clip_rel = find_clip_mmse(values, self.num_bits_params)
                 elif self.weight_clip_threshold == -1.0:
-                    clip_max_abs = find_clip_aciq(values, self.num_bits_params)
+                    clip_max_abs, clip_rel = find_clip_aciq(values, self.num_bits_params)
                 elif self.weight_clip_threshold == -2.0:
-                    clip_max_abs = find_clip_entropy(values, self.num_bits_params)
+                    clip_max_abs, clip_rel = find_clip_entropy(values, self.num_bits_params)
                 else:
                     raise ValueError('Undefined weight clip method')
+
+                # Save the rel mmse clip thresh
+                if self.mmse_track_dict is not None:
+                    mmse_w_name = self.name + '_mmse_w'
+                    self.mmse_track_dict[mmse_w_name] = clip_rel
 
             self.w_scale = symmetric_linear_quantization_scale_factor(self.num_bits_params, clip_max_abs)
 
@@ -141,13 +149,17 @@ class OCSParamLayerWrapper(RangeLinearActQuantWrapper):
                 else:
                     print('Auto-tuning for activation clip threshold...')
                     if self.act_clip_threshold == 0.0:
-                        act_clip_max_abs = find_clip_mmse(input_np.flatten(), self.num_bits_acts)
+                        act_clip_max_abs, clip_rel = find_clip_mmse(input_np.flatten(), self.num_bits_acts)
                     elif self.act_clip_threshold == -1.0:
-                        act_clip_max_abs = find_clip_aciq(input_np.flatten(), self.num_bits_acts)
+                        act_clip_max_abs, clip_rel = find_clip_aciq(input_np.flatten(), self.num_bits_acts)
                     elif self.act_clip_threshold == -2.0:
-                        act_clip_max_abs = find_clip_entropy(input_np.flatten(), self.num_bits_acts)
+                        act_clip_max_abs, clip_rel = find_clip_entropy(input_np.flatten(), self.num_bits_acts)
                     else:
                         raise ValueError('Undefined act clip method')
+                    # Save the rel mmse clip thresh
+                    if self.mmse_track_dict is not None:
+                        mmse_a_name = self.name + '_mmse_a'
+                        self.mmse_track_dict[mmse_a_name] = clip_rel
 
                 self.act_clip_max_abs = torch.tensor(act_clip_max_abs).cuda()
 
@@ -229,7 +241,8 @@ class OCSParamLayerWrapper(RangeLinearActQuantWrapper):
 class OCSQuantizer(Quantizer):
     def __init__(self, model, bits_activations=8, bits_parameters=8,
                  weight_expand_ratio=0.0, weight_clip_threshold=1.0,
-                 act_expand_ratio=0.0, act_clip_threshold=1.0, ut_clip_dict=None):
+                 act_expand_ratio=0.0, act_clip_threshold=1.0,
+                 ut_clip_dict=None, mmse_dict=None, mmse_delta=.25):
         super(OCSQuantizer, self).__init__(model, bits_activations=bits_activations,
                                            bits_weights=bits_parameters,
                                            train_with_fp_copy=False)
@@ -238,19 +251,37 @@ class OCSQuantizer(Quantizer):
                                          'params': {'bits_activations': bits_activations,
                                                     'bits_parameters': bits_parameters},
                                          }
+        self.ut_clip_dict = ut_clip_dict
+        self.mmse_eval_dict = mmse_dict
+        # Create a new dictionary for tracking mmse values
+        self.mmse_track_dict = dict()
         def replace_fn(module, name, qbits_map):
             ut_clip_w_name = name + '_clip_w'
             ut_clip_a_name = name + '_clip_a'
-            # assume that key exists for now
-            if ut_clip_dict:
-                ut_clip_w = ut_clip_dict[name + '_clip_w']
-                ut_clip_a = ut_clip_dict[name + '_clip_a']
+
+            # evaluating with a clip dict
+            if self.ut_clip_dict:
+                ut_clip_w = self.ut_clip_dict[name + '_clip_w']
+                ut_clip_a = self.ut_clip_dict[name + '_clip_a']
             else:
-                ut_clip_w = ut.tune(weight_clip_threshold, (.7, 1.0), name=ut_clip_w_name)
-                ut_clip_a = ut.tune(act_clip_threshold, (.7, 1.0), name=ut_clip_a_name)
+                if self.mmse_eval_dict:  # tuning with an mmse dict
+                    mmse_w_name = name + '_mmse_w'
+                    mmse_a_name = name + '_mmse_a'
+
+                    mmse_w = self.mmse_eval_dict[mmse_w_name]
+                    mmse_a = self.mmse_eval_dict[mmse_a_name]
+
+                    ut_clip_w = ut.tune(weight_clip_threshold, (mmse_w - mmse_delta, mmse_w + mmse_delta), name=ut_clip_w_name)
+                    ut_clip_a = ut.tune(act_clip_threshold, (mmse_a - mmse_delta, mmse_a + mmse_delta), name=ut_clip_a_name)
+                else:  # tuning without an mmse dict
+                    # create a dict to be track the mmse values
+                    ut_clip_w = ut.tune(weight_clip_threshold, (0, 1.0), name=ut_clip_w_name)
+                    ut_clip_a = ut.tune(act_clip_threshold, (0, 1.0), name=ut_clip_a_name)
             return OCSParamLayerWrapper(module, qbits_map[name].acts, qbits_map[name].wts,
                                         weight_expand_ratio=weight_expand_ratio, weight_clip_threshold=ut_clip_w,
-                                        act_expand_ratio=act_expand_ratio, act_clip_threshold=ut_clip_a)
+                                        act_expand_ratio=act_expand_ratio, act_clip_threshold=ut_clip_a,
+                                        mmse_track_dict=self.mmse_track_dict,
+                                        name=name)
 
         self.replacement_factory[nn.Conv2d] = replace_fn
         # self.replacement_factory[nn.Linear] = replace_fn

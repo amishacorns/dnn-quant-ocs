@@ -42,8 +42,9 @@ def find_clip_mmse(values, num_bits):
              for alpha in alphas ]
 
     alpha_best = alphas[np.argmin(mses)]
-    print(" MSE alpha_best = %5.2f / %5.2f" % (alpha_best, max_abs))
-    return alpha_best
+    alpha_rel = alpha_best/max_abs
+    print(" MSE alpha_best = %5.2f / %5.2f / %5.2f" % (alpha_best, max_abs, alpha_rel))
+    return alpha_best, alpha_rel
 
 #-------------------------------------------------------------------------
 # ACIQ method

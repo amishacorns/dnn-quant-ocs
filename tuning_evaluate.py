@@ -54,6 +54,7 @@ import argparse
 import time
 import os
 import sys
+import csv
 import numpy as np
 import torch
 import torch.nn.parallel
@@ -96,8 +97,12 @@ def create_parser():
                         metavar='N', help='mini-batch size (default: 256)')
     parser.add_argument('--print-freq', '-p', default=10, type=int,
                         metavar='N', help='print frequency (default: 10)')
-    parser.add_argument('--ut_clip_dict', default='', type=str, metavar='PATH',
+    parser.add_argument('--ut-clip-path', default='', type=str, metavar='PATH',
                         help='path to the uptune output archive')
+    parser.add_argument('--mmse-read-path', default='', type=str, metavar='PATH',
+                        help='base path to the mmse csvs')
+    parser.add_argument('--mmse-write-path', default='', type=str, metavar='PATH',
+                        help='base path to write mmse csvs')
     parser.add_argument('--quantize-method', default=None, type=str,
                         choices=[None, "linear", "ocs"],
                         help='Apply quantization to model before evaluation')
@@ -212,7 +217,7 @@ def profile_for_quantization(data_loader, model):
     msglogger.info('==> Profile runtime: %d' % (time.time() - end))
 
 """ Parse CSV into dictionary"""
-def parse_csv(file_path):
+def parse_clip_csv(file_path):
     model_layers = np.genfromtxt(file_path, delimiter=',', dtype=str)
     model_layers = model_layers[0][2:-2]
     clip_threshs = np.genfromtxt(file_path, delimiter=',', dtype=float)
@@ -221,20 +226,39 @@ def parse_csv(file_path):
 
     return dict(zip(model_layers, clip_threshs))
 
+def parse_mmse_csv(file_path):
+    with open(file_path, mode='r') as file:
+        reader = csv.reader(file)
+        mmse_dict = {}
+        for row in reader:
+            mmse_dict[row[0]] = row[1]
+
+        return mmse_dict
+
+def write_mmse_csv(file_path, mmse_dict):
+    with open(file_path, mode='w') as file:
+        writer = csv.writer(file)
+        for k, v in mmse_dict:
+            writer.writerow([k, v])
+
 def quantize_model(model, data_loader, args):
     if args.quantize_method:
         if args.quantize_method == "linear":
             quantizer = quantization.SymmetricLinearQuantizer(model,
                 args.act_bits, args.weight_bits)
         if args.quantize_method == "ocs":
-            ut_clip_dict = parse_csv(args.ut_clip_dict) if args.ut_clip_dict else None
+            assert not (args.ut_clip_path and args.mmse_path)
+            ut_clip_dict = parse_clip_csv(args.ut_clip_path) if args.ut_clip_path else None
+            # If evaluating with an mmse read path,
+            mmse_dict = parse_mmse_csv(args.mmse_path) if args.mmse_read_path and (not args.evaluate) else None
             quantizer = quantization.OCSQuantizer(model,
-                args.act_bits, args.weight_bits,
-                weight_expand_ratio=args.weight_expand_ratio,
-                weight_clip_threshold=args.weight_clip_threshold,
-                act_expand_ratio=args.act_expand_ratio,
-                act_clip_threshold=args.act_clip_threshold,
-                ut_clip_dict=ut_clip_dict)
+                                                  args.act_bits, args.weight_bits,
+                                                  weight_expand_ratio=args.weight_expand_ratio,
+                                                  weight_clip_threshold=args.weight_clip_threshold,
+                                                  act_expand_ratio=args.act_expand_ratio,
+                                                  act_clip_threshold=args.act_clip_threshold,
+                                                  ut_clip_dict=ut_clip_dict,
+                                                  mmse_dict=mmse_dict)
         else:
             msglogger.info('--- Quantizer not found ---')
 
@@ -247,6 +271,8 @@ def quantize_model(model, data_loader, args):
             quantization.ocs_set_profile_mode(True)
             profile_for_quantization(data_loader, model)
             quantization.ocs_set_profile_mode(False)
+            if args.mmse_write_path:
+                write_mmse_csv(args.mmse_write_path, quantizer.mmse_track_dict)
 
 if __name__ == '__main__':
     top1 = main_func()
